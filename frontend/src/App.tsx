@@ -1,6 +1,40 @@
-import React from 'react'; 
+import React, { useEffect, useState } from 'react';
+import { socket } from "./socket";
+
+// Hardcode a test room ID for now
+const TEST_ROOM_ID = 'test-room-123';
 
 function App() {
+
+  const [isConnected, setIsConnected] = useState(false);
+
+  useEffect(() => {
+    // When socket connects
+    socket.on('connect', () => {
+      setIsConnected(true);
+      console.log('Socket connected successfully!');
+
+      // Join our test room
+      socket.emit('joinRoom', TEST_ROOM_ID);
+  });
+
+  // When socket disconnects
+    socket.on('disconnect', () => {
+      setIsConnected(false);
+      console.log('Socket disconnected.');
+    });
+
+    // Manually connect the socket
+    socket.connect();
+
+    // Cleanup on unmount
+    return () => {
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.disconnect();
+    };
+  }, []);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
       {/*Header*/}
@@ -15,8 +49,11 @@ function App() {
       </main>
 
       {/* Footer/Status */}
-      <footer className='mt-8 text-sm text-gray-500'>
-        Status :Disconnected (BackendAPI : http://localhost:3001/health )
+      <footer className="mt-8 text-sm">
+        Status:{' '}
+        <span className={`font-bold ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
+          {isConnected ? `Connected (Room: ${TEST_ROOM_ID})` : 'Disconnected'}
+        </span>
       </footer>
     </div>
   );

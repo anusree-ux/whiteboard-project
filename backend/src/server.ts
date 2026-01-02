@@ -2,7 +2,8 @@ import * as dotenv from "dotenv";
 import express, { Request,Response} from "express";
 import connectDB  from "./config/db";
 import authRoutes from "./routes/authRoutes";
-import { connect } from "node:http2";
+import { createServer } from "http";
+import { Server as SocketIOServer } from 'socket.io';
 
 // Load environment variables from .env file
 dotenv.config();  
@@ -23,7 +24,37 @@ app.get("/health", (req: Request, res: Response) => {
   res.status(200).json({status:'API running', service:'whiteboard-api'});
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 API Server is running on port ${PORT}`);
-    console.log(`Access health check at http://localhost:${PORT}/health`);
+// Create HTTP server
+const httpServer = createServer(app);
+
+//create socket.io server
+const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST"]
+  }
+})
+
+//Socket.io events
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
+
+  socket.on("joinRoom", (roomId: string) => {
+    socket.join(roomId);
+    console.log(`${socket.id} joined room ${roomId}`);
+  });
+
+  socket.on("drawingAction", (data, roomId) => {
+    socket.to(roomId).emit("drawingAction", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Client disconnected:", socket.id);
+  });
+});
+
+//start http server(not express)
+httpServer.listen(PORT, () => {
+  console.log(`🚀 API + Socket Server running on port ${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
 });
