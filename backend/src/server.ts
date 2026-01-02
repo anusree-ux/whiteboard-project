@@ -44,7 +44,9 @@ io.on("connection", (socket) => {
     console.log(`${socket.id} joined room ${roomId}`);
   });
 
-  socket.on("drawingAction", (data, roomId) => {
+  socket.on("drawingAction", (data: any, roomId: string) => {
+    // .to(roomId) targets the room
+    // .emit sends it to everyone in that room EXCEPT the sender
     socket.to(roomId).emit("drawingAction", data);
   });
 

@@ -1,62 +1,96 @@
-import React, { useEffect, useState } from 'react';
-import { socket } from "./socket";
-
-// Hardcode a test room ID for now
-const TEST_ROOM_ID = 'test-room-123';
+// frontend/src/App.tsx (Update)
+import React, { useEffect, useRef, useState } from 'react';
+import { socket } from './socket';
 
 function App() {
-
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // When socket connects
+    socket.connect();
     socket.on('connect', () => {
       setIsConnected(true);
-      console.log('Socket connected successfully!');
-
-      // Join our test room
-      socket.emit('joinRoom', TEST_ROOM_ID);
-  });
-
-  // When socket disconnects
-    socket.on('disconnect', () => {
-      setIsConnected(false);
-      console.log('Socket disconnected.');
+      console.log("socket connected successfully");
+      socket.emit('joinRoom', 'test-room-123');
     });
 
-    // Manually connect the socket
-    socket.connect();
+    // LISTENER: Receive drawing data from others
+    socket.on('drawingAction', (data: any) => {
+      drawOnCanvas(data.x, data.y, data.type, false);
+    });
 
-    // Cleanup on unmount
-    return () => {
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.disconnect();
-    };
+    socket.on('disconnect', () => {
+      setIsConnected(false);
+      console.log("socket disconnected");
+    });
+
+    return () => { socket.disconnect(); };
   }, []);
 
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
-      {/*Header*/}
-      <header className="text-3xl font-bold mb-8 text-indigo-700">
-        Collaborative Whiteboard
-      </header>
-      {/*Placeholder of canvas Area*/}
-      <main className="w-full max-w-4xl h-96 border-4 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-white shadow-xl">
-        <p className="text-gray-500 text-lg">
-          Canvas Area Placeholder - (ready for drawing logic)
-        </p>
-      </main>
+  const drawOnCanvas = (x: number, y: number, type: 'start' | 'draw', emit: boolean) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-      {/* Footer/Status */}
-      <footer className="mt-8 text-sm">
-        Status:{' '}
-        <span className={`font-bold ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
-          {isConnected ? `Connected (Room: ${TEST_ROOM_ID})` : 'Disconnected'}
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4f46e5'; // Indigo color
+
+    if (type === 'start') {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+
+    // If this move was made by ME, send it to the server
+    if (emit) {
+      socket.emit('drawingAction', { x, y, type }, 'test-room-123');
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDrawing(true);
+    const { offsetX, offsetY } = e.nativeEvent;
+    drawOnCanvas(offsetX, offsetY, 'start', true);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDrawing) return;
+    const { offsetX, offsetY } = e.nativeEvent;
+    drawOnCanvas(offsetX, offsetY, 'draw', true);
+  };
+
+  const stopDrawing = () => setIsDrawing(false);
+
+ /* ---------------- UI ---------------- */
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+      <h1 className="text-3xl font-bold mb-4 text-indigo-700">
+        Collaborative Whiteboard
+      </h1>
+
+      <canvas
+        ref={canvasRef}
+        width={800}
+        height={500}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={stopDrawing}
+        onMouseLeave={stopDrawing}
+        className="bg-white border rounded-lg shadow-lg cursor-crosshair"
+      />
+
+       <p className="mt-4 text-sm">
+        Status: <span className={isConnected ? "text-green-500" : "text-red-500"}>
+          {isConnected ? "Connected" : "Disconnected"}
         </span>
-      </footer>
+      </p>
     </div>
   );
 }
 
-export default App
+export default App;
